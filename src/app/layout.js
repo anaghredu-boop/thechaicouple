@@ -10,6 +10,11 @@ const inter = Inter({
 export const metadata = {
   title: "Chai Bun Queue",
   description: "Realtime queue management for Irani chai & bun orders.",
+  icons: {
+    icon: "/thechaicouple.jpg",
+    shortcut: "/thechaicouple.jpg",
+    apple: "/thechaicouple.jpg",
+  },
 };
 
 export default function RootLayout({ children }) {

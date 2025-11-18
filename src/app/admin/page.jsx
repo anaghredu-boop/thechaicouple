@@ -371,9 +371,9 @@ function AdminDashboard() {
                   <Badge variant="secondary">
                     {queueTicketsWaiting.length} waiting
                   </Badge>
-                  <Button variant="outline" onClick={clearToday} disabled={clearing}>
+                  {/* <Button variant="outline" onClick={clearToday} disabled={clearing}>
                     {clearing ? "Clearing..." : "Clear Today"}
-                  </Button>
+                  </Button> */}
                 </div>
               </CardHeader>
               <CardContent>
