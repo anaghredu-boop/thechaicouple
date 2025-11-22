@@ -9,9 +9,13 @@ const DEFAULT_SETTINGS = {
   serviceStart: "06:00",
   serviceEnd: "23:00",
   closedMessage: "Queue is currently closed. Please check back during service hours.",
-  availability: {
-    chai: true,
-    bun: true,
+  inventory: {
+    chai: 0,
+    bun: 0,
+  },
+  buffer: {
+    chai: 10,
+    bun: 10,
   },
 };
 
@@ -34,9 +38,13 @@ export async function POST(request) {
     const serviceStart = body.serviceStart || DEFAULT_SETTINGS.serviceStart;
     const serviceEnd = body.serviceEnd || DEFAULT_SETTINGS.serviceEnd;
     const closedMessage = body.closedMessage || DEFAULT_SETTINGS.closedMessage;
-    const availability = {
-      chai: body.availability?.chai ?? true,
-      bun: body.availability?.bun ?? true,
+    const inventory = {
+      chai: Number(body.inventory?.chai) ?? DEFAULT_SETTINGS.inventory.chai,
+      bun: Number(body.inventory?.bun) ?? DEFAULT_SETTINGS.inventory.bun,
+    };
+    const buffer = {
+      chai: Number(body.buffer?.chai) ?? DEFAULT_SETTINGS.buffer.chai,
+      bun: Number(body.buffer?.bun) ?? DEFAULT_SETTINGS.buffer.bun,
     };
 
     await setDoc(
@@ -45,14 +53,15 @@ export async function POST(request) {
         serviceStart,
         serviceEnd,
         closedMessage,
-        availability,
+        inventory,
+        buffer,
         updatedAt: serverTimestamp(),
       },
       { merge: true }
     );
 
     return NextResponse.json(
-      { serviceStart, serviceEnd, closedMessage, availability },
+      { serviceStart, serviceEnd, closedMessage, inventory, buffer },
       { status: 200 }
     );
   } catch (err) {

@@ -103,6 +103,15 @@ export default function QueuePage() {
           setSettings(payload.settings);
           setSettingsLoading(false);
           setSettingsError("");
+          
+          // Auto-adjust quantities if inventory drops below selected quantities
+          setQuantities((prev) => {
+            const newInventory = payload.settings.inventory || { chai: 0, bun: 0 };
+            return {
+              chai: Math.min(prev.chai || 0, newInventory.chai || 0),
+              bun: Math.min(prev.bun || 0, newInventory.bun || 0),
+            };
+          });
         }
       } catch {
         setSettingsError("Failed to process settings update");
@@ -154,9 +163,21 @@ export default function QueuePage() {
     return nowMinutes >= startMinutes || nowMinutes <= endMinutes;
   }, [settings]);
 
-  const availability = settings?.availability || { chai: true, bun: true };
+  // Calculate availability from inventory (inventory > 0 means available)
+  const inventory = settings?.inventory || { chai: 0, bun: 0 };
+  const buffer = settings?.buffer || { chai: 10, bun: 10 };
+  const availability = {
+    chai: (inventory.chai || 0) > 0,
+    bun: (inventory.bun || 0) > 0,
+  };
   const hasAnyAvailable = availability.chai || availability.bun;
   const queueOpen = isWithinServiceWindow && hasAnyAvailable;
+  
+  // Check if inventory is below buffer (warning state)
+  const chaiLowStock = (inventory.chai || 0) > 0 && (inventory.chai || 0) < (buffer.chai || 10);
+  const bunLowStock = (inventory.bun || 0) > 0 && (inventory.bun || 0) < (buffer.bun || 10);
+  const chaiOutOfStock = (inventory.chai || 0) <= 0;
+  const bunOutOfStock = (inventory.bun || 0) <= 0;
 
   const canSubmit =
     queueOpen && name.trim().length > 0 && orderItems.length > 0 && !submitting;
@@ -269,13 +290,31 @@ export default function QueuePage() {
                     item.key === "chai" ? pricing.chaiPrice : pricing.bunPrice;
                   const qty = quantities[item.key] || 0;
                   const available = availability[item.key === "chai" ? "chai" : "bun"];
+                  const isChai = item.key === "chai";
+                  const itemInventory = isChai ? inventory.chai : inventory.bun;
+                  const itemBuffer = isChai ? buffer.chai : buffer.bun;
+                  const isLowStock = itemInventory > 0 && itemInventory < itemBuffer;
+                  const isOutOfStock = itemInventory <= 0;
+                  
                   return (
                     <div
                       key={item.key}
                       className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3"
                     >
                       <div>
-                        <p className="font-medium">{item.label}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{item.label}</p>
+                          {isOutOfStock && (
+                            <Badge variant="destructive" className="text-xs">
+                              Out of Stock
+                            </Badge>
+                          )}
+                          {isLowStock && !isOutOfStock && (
+                            <Badge variant="default" className="text-xs bg-amber-500 hover:bg-amber-600">
+                              Low Stock ({itemInventory} left)
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {price ? currency.format(price) : "Pricing pending"}
                         </p>
@@ -305,7 +344,7 @@ export default function QueuePage() {
                           type="button"
                           size="icon"
                           onClick={() => updateQuantity(item.key, 1)}
-                          disabled={qty >= 9 || !available || !queueOpen}
+                          disabled={!available || !queueOpen || qty >= itemInventory}
                         >
                           <Plus className="h-4 w-4" />
                         </Button>

@@ -195,8 +195,8 @@ export default function StatusPage() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("queueTicket");
     }
-    router.replace("/served");
-  }, [status, router]);
+    router.replace(`/served/${id}`);
+  }, [status, router, id]);
 
   return (
     <main className="min-h-screen bg-muted/40 py-10">

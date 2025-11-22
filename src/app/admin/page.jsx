@@ -16,6 +16,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Minus, Plus, Edit, Trash2 } from "lucide-react";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -144,12 +146,18 @@ function AdminDashboard() {
   const [serviceStart, setServiceStart] = useState("06:00");
   const [serviceEnd, setServiceEnd] = useState("23:00");
   const [closedMessage, setClosedMessage] = useState("");
-  const [availability, setAvailability] = useState({ chai: true, bun: true });
+  const [inventory, setInventory] = useState({ chai: 0, bun: 0 });
+  const [buffer, setBuffer] = useState({ chai: 10, bun: 10 });
   const [settingsError, setSettingsError] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [clearing, setClearing] = useState(false);
   const [paidUpdating, setPaidUpdating] = useState({});
+  const [editingTicket, setEditingTicket] = useState(null);
+  const [editQuantities, setEditQuantities] = useState({ chai: 0, bun: 0 });
+  const [editError, setEditError] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [deletingTicket, setDeletingTicket] = useState(null);
 
   const loadQueueTickets = useCallback(
     async ({ silent } = {}) => {
@@ -208,6 +216,22 @@ function AdminDashboard() {
       try {
         const payload = JSON.parse(event.data);
         setQueueTickets(payload.tickets || []);
+        
+        // Update settings (including inventory) in real-time
+        if (payload.settings) {
+          setInventory({
+            chai: payload.settings.inventory?.chai ?? 0,
+            bun: payload.settings.inventory?.bun ?? 0,
+          });
+          setBuffer({
+            chai: payload.settings.buffer?.chai ?? 10,
+            bun: payload.settings.buffer?.bun ?? 10,
+          });
+          setServiceStart(payload.settings.serviceStart || "06:00");
+          setServiceEnd(payload.settings.serviceEnd || "23:00");
+          setClosedMessage(payload.settings.closedMessage || "");
+        }
+        
         setQueueLoading(false);
         setQueueError("");
       } catch {
@@ -245,6 +269,21 @@ function AdminDashboard() {
     loadPricing();
   }, []);
 
+  const reloadInventory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings");
+      const json = await res.json();
+      if (res.ok) {
+        setInventory({
+          chai: json.inventory?.chai ?? 0,
+          bun: json.inventory?.bun ?? 0,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -257,9 +296,13 @@ function AdminDashboard() {
         setServiceStart(json.serviceStart || "06:00");
         setServiceEnd(json.serviceEnd || "23:00");
         setClosedMessage(json.closedMessage || "");
-        setAvailability({
-          chai: json.availability?.chai ?? true,
-          bun: json.availability?.bun ?? true,
+        setInventory({
+          chai: json.inventory?.chai ?? 0,
+          bun: json.inventory?.bun ?? 0,
+        });
+        setBuffer({
+          chai: json.buffer?.chai ?? 10,
+          bun: json.buffer?.bun ?? 10,
         });
       } catch {
         setSettingsError("Failed to load settings");
@@ -267,6 +310,49 @@ function AdminDashboard() {
     }
     loadSettings();
   }, []);
+
+  // Listen to real-time settings updates (including inventory) from stream
+  useEffect(() => {
+    const dateKey = getTodayKey();
+    const source = new EventSource(`/api/queue/stream?date=${dateKey}`);
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.settings) {
+          const newInventory = {
+            chai: payload.settings.inventory?.chai ?? 0,
+            bun: payload.settings.inventory?.bun ?? 0,
+          };
+          
+          // Update inventory and settings in real-time
+          setInventory(newInventory);
+          setBuffer({
+            chai: payload.settings.buffer?.chai ?? 10,
+            bun: payload.settings.buffer?.bun ?? 10,
+          });
+          setServiceStart(payload.settings.serviceStart || "06:00");
+          setServiceEnd(payload.settings.serviceEnd || "23:00");
+          setClosedMessage(payload.settings.closedMessage || "");
+          
+          // Auto-adjust edit quantities if inventory drops below selected quantities
+          if (editingTicket) {
+            setEditQuantities((prev) => ({
+              chai: Math.min(prev.chai || 0, newInventory.chai || 0),
+              bun: Math.min(prev.bun || 0, newInventory.bun || 0),
+            }));
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+    source.onerror = () => {
+      // ignore stream errors
+    };
+    return () => {
+      source.close();
+    };
+  }, [editingTicket]);
 
   async function updateStatus(id, dateKey, status) {
     try {
@@ -282,6 +368,93 @@ function AdminDashboard() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  function openEditDialog(ticket) {
+    const items = Array.isArray(ticket.items) ? ticket.items : [];
+    const chaiItem = items.find((item) => item.name === "Irani Chai");
+    const bunItem = items.find((item) => item.name === "Bun");
+    setEditQuantities({
+      chai: chaiItem ? Number(chaiItem.qty) || 0 : 0,
+      bun: bunItem ? Number(bunItem.qty) || 0 : 0,
+    });
+    setEditingTicket(ticket);
+    setEditError("");
+  }
+
+  function updateEditQuantity(key, delta) {
+    setEditQuantities((prev) => {
+      const next = Math.max(0, (prev[key] || 0) + delta);
+      return { ...prev, [key]: next };
+    });
+  }
+
+  async function saveEdit() {
+    if (!editingTicket) return;
+    
+    setEditError("");
+    setEditSaving(true);
+
+    try {
+      // Build items array
+      const items = [];
+      if (editQuantities.chai > 0) {
+        items.push({ name: "Irani Chai", qty: editQuantities.chai });
+      }
+      if (editQuantities.bun > 0) {
+        items.push({ name: "Bun", qty: editQuantities.bun });
+      }
+
+      if (items.length === 0) {
+        setEditError("At least one item with quantity is required");
+        setEditSaving(false);
+        return;
+      }
+
+      const res = await fetch("/api/ticket", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingTicket.id,
+          dateKey: editingTicket.dateKey,
+          items,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setEditError(json.message || json.error || "Failed to update order");
+        setEditSaving(false);
+        return;
+      }
+
+      setEditingTicket(null);
+      await loadQueueTickets();
+      await reloadInventory();
+    } catch (err) {
+      setEditError("Failed to update order");
+      setEditSaving(false);
+    }
+  }
+
+  async function deleteTicket(id, dateKey) {
+    if (!confirm("Are you sure you want to delete this order?")) return;
+    
+    setDeletingTicket(id);
+    try {
+      const res = await fetch(`/api/ticket?id=${encodeURIComponent(id)}&date=${encodeURIComponent(dateKey)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to delete ticket");
+      }
+      await loadQueueTickets();
+      await reloadInventory();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingTicket(null);
     }
   }
 
@@ -361,7 +534,6 @@ function AdminDashboard() {
           serviceStart,
           serviceEnd,
           closedMessage,
-          availability,
         }),
       });
       const json = await res.json();
@@ -373,10 +545,6 @@ function AdminDashboard() {
       setServiceStart(json.serviceStart || "06:00");
       setServiceEnd(json.serviceEnd || "23:00");
       setClosedMessage(json.closedMessage || "");
-      setAvailability({
-        chai: json.availability?.chai ?? true,
-        bun: json.availability?.bun ?? true,
-      });
       setSettingsSaving(false);
     } catch {
       setSettingsError("Failed to save settings");
@@ -384,11 +552,32 @@ function AdminDashboard() {
     }
   }
 
-  function toggleAvailability(item) {
-    setAvailability((prev) => ({
-      ...prev,
-      [item]: !prev[item],
-    }));
+  async function saveInventory(event) {
+    event.preventDefault();
+    setSettingsError("");
+    setSettingsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inventory,
+          buffer,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSettingsError(json.error || "Failed to save inventory");
+        setSettingsSaving(false);
+        return;
+      }
+      setInventory(json.inventory || { chai: 0, bun: 0 });
+      setBuffer(json.buffer || { chai: 10, bun: 10 });
+      setSettingsSaving(false);
+    } catch {
+      setSettingsError("Failed to save inventory");
+      setSettingsSaving(false);
+    }
   }
 
   const queueTicketsWaiting = useMemo(
@@ -472,7 +661,19 @@ function AdminDashboard() {
                     Waiting tickets for {todayKey}
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={inventory.chai <= 0 ? "destructive" : inventory.chai < buffer.chai ? "default" : "secondary"}
+                    >
+                      Chai: {inventory.chai}
+                    </Badge>
+                    <Badge 
+                      variant={inventory.bun <= 0 ? "destructive" : inventory.bun < buffer.bun ? "default" : "secondary"}
+                    >
+                      Bun: {inventory.bun}
+                    </Badge>
+                  </div>
                   <Badge variant="secondary">
                     {queueTicketsWaiting.length} waiting
                   </Badge>
@@ -516,14 +717,31 @@ function AdminDashboard() {
                             {formatOrder(ticket.items)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                updateStatus(ticket.id, ticket.dateKey, "ready")
-                              }
-                            >
-                              Done
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openEditDialog(ticket)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => deleteTicket(ticket.id, ticket.dateKey)}
+                                disabled={deletingTicket === ticket.id}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  updateStatus(ticket.id, ticket.dateKey, "ready")
+                                }
+                              >
+                                Done
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -532,6 +750,99 @@ function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Edit Order Dialog */}
+            <Dialog open={editingTicket !== null} onOpenChange={(open) => !open && setEditingTicket(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Order</DialogTitle>
+                  <DialogDescription>
+                    Update quantities for {editingTicket?.name || ""}. Stock will be validated.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3">
+                      <div>
+                        <p className="font-medium">Irani Chai</p>
+                        <p className="text-sm text-muted-foreground">
+                          Available: {inventory.chai}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateEditQuantity("chai", -1)}
+                          disabled={editQuantities.chai === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-lg font-semibold">
+                          {editQuantities.chai}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => updateEditQuantity("chai", 1)}
+                          disabled={editQuantities.chai >= inventory.chai}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3">
+                      <div>
+                        <p className="font-medium">Bun</p>
+                        <p className="text-sm text-muted-foreground">
+                          Available: {inventory.bun}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateEditQuantity("bun", -1)}
+                          disabled={editQuantities.bun === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-lg font-semibold">
+                          {editQuantities.bun}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => updateEditQuantity("bun", 1)}
+                          disabled={editQuantities.bun >= inventory.bun}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {editError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{editError}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditingTicket(null)}
+                    disabled={editSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={saveEdit} disabled={editSaving}>
+                    {editSaving ? "Saving..." : "Save Changes"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -671,25 +982,79 @@ function AdminDashboard() {
                       placeholder="We pour chai daily between 6am – 11pm."
                     />
                   </div>
-                  <div className="md:col-span-2 space-y-3">
-                    <Label>Availability</Label>
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        type="button"
-                        variant={availability.chai ? "secondary" : "outline"}
-                        className="flex-1 sm:flex-none"
-                        onClick={() => toggleAvailability("chai")}
-                      >
-                        Irani Chai — {availability.chai ? "Available" : "Sold out"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={availability.bun ? "secondary" : "outline"}
-                        className="flex-1 sm:flex-none"
-                        onClick={() => toggleAvailability("bun")}
-                      >
-                        Bun Maska — {availability.bun ? "Available" : "Sold out"}
-                      </Button>
+                  {settingsError && (
+                    <div className="md:col-span-2">
+                      <Alert variant="destructive">
+                        <AlertDescription>{settingsError}</AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+                  <div className="md:col-span-2">
+                    <Button type="submit" disabled={settingsSaving}>
+                      {settingsSaving ? "Saving..." : "Save service settings"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Inventory Management</CardTitle>
+                <CardDescription>
+                  Set inventory levels and buffer thresholds for each item.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={saveInventory} className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="chaiInventory">Irani Chai Inventory</Label>
+                      <Input
+                        id="chaiInventory"
+                        type="number"
+                        min={0}
+                        value={inventory.chai}
+                        onChange={(e) => setInventory((prev) => ({ ...prev, chai: Number(e.target.value) || 0 }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="chaiBuffer">Irani Chai Buffer</Label>
+                      <Input
+                        id="chaiBuffer"
+                        type="number"
+                        min={0}
+                        value={buffer.chai}
+                        onChange={(e) => setBuffer((prev) => ({ ...prev, chai: Number(e.target.value) || 0 }))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Warning will show when inventory falls below this level
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bunInventory">Bun Inventory</Label>
+                      <Input
+                        id="bunInventory"
+                        type="number"
+                        min={0}
+                        value={inventory.bun}
+                        onChange={(e) => setInventory((prev) => ({ ...prev, bun: Number(e.target.value) || 0 }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bunBuffer">Bun Buffer</Label>
+                      <Input
+                        id="bunBuffer"
+                        type="number"
+                        min={0}
+                        value={buffer.bun}
+                        onChange={(e) => setBuffer((prev) => ({ ...prev, bun: Number(e.target.value) || 0 }))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Warning will show when inventory falls below this level
+                      </p>
                     </div>
                   </div>
                   {settingsError && (
@@ -701,7 +1066,7 @@ function AdminDashboard() {
                   )}
                   <div className="md:col-span-2">
                     <Button type="submit" disabled={settingsSaving}>
-                      {settingsSaving ? "Saving..." : "Save service settings"}
+                      {settingsSaving ? "Saving..." : "Save inventory settings"}
                     </Button>
                   </div>
                 </form>

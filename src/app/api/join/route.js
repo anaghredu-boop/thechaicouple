@@ -6,6 +6,8 @@ const {
   collection,
   runTransaction,
   setDoc,
+  updateDoc,
+  getDoc,
   serverTimestamp,
 } = firestoreHelpers;
 
@@ -64,8 +66,41 @@ export async function POST(request) {
 
       tx.set(ticketRef, ticket);
 
-      return { id: ticketRef.id, position: nextPosition, dateKey };
+      return { id: ticketRef.id, position: nextPosition, dateKey, items };
     });
+
+    // Decrement inventory when order is placed
+    const settingsRef = doc(db, "config", "app-settings");
+    const settingsSnap = await getDoc(settingsRef);
+    
+    if (settingsSnap.exists()) {
+      const currentSettings = settingsSnap.data();
+      const currentInventory = currentSettings.inventory || { chai: 0, bun: 0 };
+      
+      // Calculate inventory changes
+      let chaiDecrement = 0;
+      let bunDecrement = 0;
+      
+      items.forEach((item) => {
+        const qty = Number(item.qty) || 0;
+        if (item.name === "Irani Chai") {
+          chaiDecrement += qty;
+        } else if (item.name === "Bun") {
+          bunDecrement += qty;
+        }
+      });
+
+      // Only decrement if we have enough inventory (prevent negative)
+      const newChaiInventory = Math.max(0, (currentInventory.chai || 0) - chaiDecrement);
+      const newBunInventory = Math.max(0, (currentInventory.bun || 0) - bunDecrement);
+
+      // Update only inventory field (more efficient than updating entire settings doc)
+      await updateDoc(settingsRef, {
+        "inventory.chai": newChaiInventory,
+        "inventory.bun": newBunInventory,
+        updatedAt: serverTimestamp(),
+      });
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (err) {

@@ -8,6 +8,10 @@ const {
   deleteDoc,
   orderBy,
   query,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
 } = firestoreHelpers;
 
 export async function GET(request) {
@@ -45,15 +49,47 @@ export async function DELETE() {
     const snapshot = await getDocs(ticketsCol);
 
     const deletions = [];
+    let totalChaiRestore = 0;
+    let totalBunRestore = 0;
+
     snapshot.forEach((docSnap) => {
       const ticketData = docSnap.data();
       // Only delete tickets with status "waiting", preserve "ready" (served) tickets
       if (ticketData.status === "waiting") {
         deletions.push(deleteDoc(docSnap.ref));
+        
+        // Calculate inventory to restore
+        const items = Array.isArray(ticketData.items) ? ticketData.items : [];
+        items.forEach((item) => {
+          const qty = Number(item.qty) || 0;
+          if (item.name === "Irani Chai") {
+            totalChaiRestore += qty;
+          } else if (item.name === "Bun") {
+            totalBunRestore += qty;
+          }
+        });
       }
     });
 
     await Promise.all(deletions);
+
+    // Restore inventory for all deleted waiting tickets
+    if (totalChaiRestore > 0 || totalBunRestore > 0) {
+      const settingsRef = doc(db, "config", "app-settings");
+      const settingsSnap = await getDoc(settingsRef);
+      
+      if (settingsSnap.exists()) {
+        const currentSettings = settingsSnap.data();
+        const currentInventory = currentSettings.inventory || { chai: 0, bun: 0 };
+        
+        // Update only inventory field (more efficient than updating entire settings doc)
+        await updateDoc(settingsRef, {
+          "inventory.chai": (currentInventory.chai || 0) + totalChaiRestore,
+          "inventory.bun": (currentInventory.bun || 0) + totalBunRestore,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
 
     return NextResponse.json({ dateKey, cleared: true }, { status: 200 });
   } catch (err) {

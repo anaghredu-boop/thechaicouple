@@ -49,6 +49,8 @@ export async function PATCH(request) {
       return sum + unitPrice * qty;
     }, 0);
 
+    // Update ticket status
+    // Note: Inventory is decremented when order is placed (in /api/join), not here
     await setDoc(
       ticketRef,
       {

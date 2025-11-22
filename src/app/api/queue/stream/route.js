@@ -7,9 +7,13 @@ const DEFAULT_SETTINGS = {
   serviceStart: "06:00",
   serviceEnd: "23:00",
   closedMessage: "Queue is currently closed. Please check back during service hours.",
-  availability: {
-    chai: true,
-    bun: true,
+  inventory: {
+    chai: 0,
+    bun: 0,
+  },
+  buffer: {
+    chai: 10,
+    bun: 10,
   },
 };
 

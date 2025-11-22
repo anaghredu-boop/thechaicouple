@@ -1,0 +1,27 @@
+config:
+  target: "http://localhost:3000/"
+  phases:
+    - duration: 10
+      arrivalRate: 5 # 10 requests per second
+      maxVusers: 10
+  processor: "./artillery-processor.js"
+scenarios:
+  - name: "Join Queue"
+    weight: 100
+    flow:
+      - function: "setUserData"
+      - post:
+          url: "/api/join"
+          headers:
+            Content-Type: "application/json"
+          json:
+            name: "{{ userName }}"
+            items: "{{ userItems }}"
+          capture:
+            - json: "$.id"
+              as: "ticketId"
+            - json: "$.position"
+              as: "position"
+          expect:
+            - statusCode: 201
+
