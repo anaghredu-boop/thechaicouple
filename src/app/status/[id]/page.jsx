@@ -455,18 +455,7 @@ export default function StatusPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                className="flex-1"
-                onClick={() => {
-                  // Refresh by reloading the page - stream will reconnect automatically
-                  if (typeof window !== "undefined") {
-                    window.location.reload();
-                  }
-                }}
-              >
-                <RotateCw className="mr-2 h-4 w-4" />
-                Refresh
-              </Button>
+              
               <Button
                 variant="outline"
                 className="flex-1"

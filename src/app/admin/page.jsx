@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Minus, Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Minus, Plus, Edit, Trash2, Loader2, RotateCw } from "lucide-react";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -169,6 +169,11 @@ function AdminDashboard() {
   const [viewingTicket, setViewingTicket] = useState(null);
   const [orderDetailsDialogOpen, setOrderDetailsDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [addUserName, setAddUserName] = useState("");
+  const [addUserQuantities, setAddUserQuantities] = useState({ chai: 0, bun: 0, tiramisu: 0 });
+  const [addUserError, setAddUserError] = useState("");
+  const [addUserSaving, setAddUserSaving] = useState(false);
 
   const loadDashboardTickets = useCallback(
     async (dateKey = dashboardDate, { silent } = {}) => {
@@ -261,8 +266,9 @@ function AdminDashboard() {
   }, [tab, todayKey]);
 
   useEffect(() => {
+    if (tab !== "dashboard") return; // Only load when on dashboard tab
     loadDashboardTickets(dashboardDate);
-  }, [dashboardDate, loadDashboardTickets]);
+  }, [tab, dashboardDate, loadDashboardTickets]);
 
   useEffect(() => {
     async function loadPricing() {
@@ -300,6 +306,8 @@ function AdminDashboard() {
   }, []);
 
   useEffect(() => {
+    if (tab !== "settings") return; // Only load when on Settings tab
+    
     async function loadSettings() {
       try {
         const res = await fetch("/api/settings");
@@ -327,62 +335,62 @@ function AdminDashboard() {
       }
     }
     loadSettings();
-  }, []);
+  }, [tab]);
 
   // Listen to real-time settings updates (including inventory) from stream
-  useEffect(() => {
-    const dateKey = getTodayKey();
-    const source = new EventSource(`/api/queue/stream?date=${dateKey}`);
-    source.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.settings) {
-          const newInventory = {
-            chai: payload.settings.inventory?.chai ?? 0,
-            bun: payload.settings.inventory?.bun ?? 0,
-            tiramisu: payload.settings.inventory?.tiramisu ?? 0,
-          };
+  // useEffect(() => {
+  //   const dateKey = getTodayKey();
+  //   const source = new EventSource(`/api/queue/stream?date=${dateKey}`);
+  //   source.onmessage = (event) => {
+  //     try {
+  //       const payload = JSON.parse(event.data);
+  //       if (payload.settings) {
+  //         const newInventory = {
+  //           chai: payload.settings.inventory?.chai ?? 0,
+  //           bun: payload.settings.inventory?.bun ?? 0,
+  //           tiramisu: payload.settings.inventory?.tiramisu ?? 0,
+  //         };
           
-          // Update inventory and settings in real-time
-          setInventory(newInventory);
-          setBuffer({
-            chai: payload.settings.buffer?.chai ?? 10,
-            bun: payload.settings.buffer?.bun ?? 10,
-            tiramisu: payload.settings.buffer?.tiramisu ?? 10,
-          });
-          setServiceStart(payload.settings.serviceStart || "06:00");
-          setServiceEnd(payload.settings.serviceEnd || "23:00");
-          setClosedMessage(payload.settings.closedMessage || "");
+  //         // Update inventory and settings in real-time
+  //         setInventory(newInventory);
+  //         setBuffer({
+  //           chai: payload.settings.buffer?.chai ?? 10,
+  //           bun: payload.settings.buffer?.bun ?? 10,
+  //           tiramisu: payload.settings.buffer?.tiramisu ?? 10,
+  //         });
+  //         setServiceStart(payload.settings.serviceStart || "06:00");
+  //         setServiceEnd(payload.settings.serviceEnd || "23:00");
+  //         setClosedMessage(payload.settings.closedMessage || "");
           
-          // Auto-adjust edit quantities if inventory drops below selected quantities
-          // Account for items already in the current order
-          if (editingTicket) {
-            const currentChaiQty = editingTicket.items?.find((item) => item.name === "Special Chai" || item.name === "Irani Chai")?.qty || 0;
-            const currentBunQty = editingTicket.items?.find((item) => item.name === "Bun")?.qty || 0;
-            const currentTiramisuQty = editingTicket.items?.find((item) => item.name === "Tiramisu")?.qty || 0;
-            const availableChai = (newInventory.chai || 0) + currentChaiQty;
-            const availableBun = (newInventory.bun || 0) + currentBunQty;
-            const availableTiramisu = (newInventory.tiramisu || 0) + currentTiramisuQty;
+  //         // Auto-adjust edit quantities if inventory drops below selected quantities
+  //         // Account for items already in the current order
+  //         if (editingTicket) {
+  //           const currentChaiQty = editingTicket.items?.find((item) => item.name === "Special Chai" || item.name === "Irani Chai")?.qty || 0;
+  //           const currentBunQty = editingTicket.items?.find((item) => item.name === "Bun")?.qty || 0;
+  //           const currentTiramisuQty = editingTicket.items?.find((item) => item.name === "Tiramisu")?.qty || 0;
+  //           const availableChai = (newInventory.chai || 0) + currentChaiQty;
+  //           const availableBun = (newInventory.bun || 0) + currentBunQty;
+  //           const availableTiramisu = (newInventory.tiramisu || 0) + currentTiramisuQty;
             
-            setEditQuantities((prev) => ({
-              chai: Math.min(prev.chai || 0, availableChai),
-              bun: Math.min(prev.bun || 0, availableBun),
-              tiramisu: Math.min(prev.tiramisu || 0, availableTiramisu),
-            }));
-          }
-          setInventoryLoaded(true);
-        }
-      } catch {
-        // ignore parse errors
-      }
-    };
-    source.onerror = () => {
-      // ignore stream errors
-    };
-    return () => {
-      source.close();
-    };
-  }, [editingTicket]);
+  //           setEditQuantities((prev) => ({
+  //             chai: Math.min(prev.chai || 0, availableChai),
+  //             bun: Math.min(prev.bun || 0, availableBun),
+  //             tiramisu: Math.min(prev.tiramisu || 0, availableTiramisu),
+  //           }));
+  //         }
+  //         setInventoryLoaded(true);
+  //       }
+  //     } catch {
+  //       // ignore parse errors
+  //     }
+  //   };
+  //   source.onerror = () => {
+  //     // ignore stream errors
+  //   };
+  //   return () => {
+  //     source.close();
+  //   };
+  // }, [editingTicket]);
 
   async function updateStatus(id, dateKey, status) {
     try {
@@ -575,6 +583,76 @@ function AdminDashboard() {
     } finally {
       setClearing(false);
       setClearTodayDialogOpen(false);
+    }
+  }
+
+  function openAddUserDialog() {
+    setAddUserName("");
+    setAddUserQuantities({ chai: 0, bun: 0, tiramisu: 0 });
+    setAddUserError("");
+    setAddUserDialogOpen(true);
+  }
+
+  function updateAddUserQuantity(key, delta) {
+    setAddUserQuantities((prev) => {
+      const next = Math.max(0, (prev[key] || 0) + delta);
+      return { ...prev, [key]: next };
+    });
+  }
+
+  async function saveAddUser() {
+    setAddUserError("");
+    setAddUserSaving(true);
+
+    try {
+      const name = addUserName.trim();
+      if (!name) {
+        setAddUserError("Name is required");
+        setAddUserSaving(false);
+        return;
+      }
+
+      // Build items array
+      const items = [];
+      if (addUserQuantities.chai > 0) {
+        items.push({ name: "Special Chai", qty: addUserQuantities.chai });
+      }
+      if (addUserQuantities.bun > 0) {
+        items.push({ name: "Bun", qty: addUserQuantities.bun });
+      }
+      if (addUserQuantities.tiramisu > 0) {
+        items.push({ name: "Tiramisu", qty: addUserQuantities.tiramisu });
+      }
+
+      if (items.length === 0) {
+        setAddUserError("At least one item with quantity is required");
+        setAddUserSaving(false);
+        return;
+      }
+
+      const res = await fetch("/api/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, items }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setAddUserError(json.error || "Failed to add user to queue");
+        setAddUserSaving(false);
+        return;
+      }
+
+      // Success - close dialog and reset state
+      // The stream will automatically update the queue and inventory
+      setAddUserDialogOpen(false);
+      setAddUserName("");
+      setAddUserQuantities({ chai: 0, bun: 0, tiramisu: 0 });
+      setAddUserSaving(false);
+    } catch (err) {
+      console.error("Error adding user:", err);
+      setAddUserError(err.message || "Failed to add user to queue");
+      setAddUserSaving(false);
     }
   }
 
@@ -827,6 +905,12 @@ function AdminDashboard() {
                     {queueTicketsWaiting.length} waiting
                   </Badge>
                   <Button
+                    variant="default"
+                    onClick={openAddUserDialog}
+                  >
+                    Add User
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={() => setClearTodayDialogOpen(true)}
                     disabled={clearing}
@@ -851,6 +935,7 @@ function AdminDashboard() {
                         <TableHead>Token</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Order</TableHead>
+                        <TableHead>Payment</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -871,6 +956,28 @@ function AdminDashboard() {
                           <TableCell>{ticket.name}</TableCell>
                           <TableCell className="text-muted-foreground">
                             {formatOrder(ticket.items)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant={ticket.paid ? "default" : "outline"}
+                              className={
+                                ticket.paid
+                                  ? "bg-green-600 text-white hover:bg-green-600/90"
+                                  : undefined
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updatePaid(ticket.id, ticket.dateKey, !ticket.paid);
+                              }}
+                              disabled={Boolean(paidUpdating[ticket.id])}
+                            >
+                              {paidUpdating[ticket.id]
+                                ? "Saving..."
+                                : ticket.paid
+                                ? "Paid"
+                                : "Mark paid"}
+                            </Button>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -1066,6 +1173,145 @@ function AdminDashboard() {
               </DialogContent>
             </Dialog>
 
+            {/* Add User Dialog */}
+            <Dialog open={addUserDialogOpen} onOpenChange={(open) => {
+              if (!open) {
+                setAddUserDialogOpen(false);
+                setAddUserName("");
+                setAddUserQuantities({ chai: 0, bun: 0, tiramisu: 0 });
+                setAddUserError("");
+              }
+            }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add User to Queue</DialogTitle>
+                  <DialogDescription>
+                    Manually add a customer to the queue. Inventory will be updated automatically.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="addUserName">Customer Name</Label>
+                    <Input
+                      id="addUserName"
+                      placeholder="Enter customer name"
+                      value={addUserName}
+                      onChange={(e) => setAddUserName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Order Items</Label>
+                    <div className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3">
+                      <div>
+                        <p className="font-medium">Special Chai</p>
+                        <p className="text-xs text-muted-foreground">Available: {inventory?.chai ?? 0}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("chai", -1)}
+                          disabled={addUserQuantities.chai === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-lg font-semibold">
+                          {addUserQuantities.chai}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("chai", 1)}
+                          disabled={addUserQuantities.chai >= (inventory?.chai ?? 0)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3">
+                      <div>
+                        <p className="font-medium">Bun</p>
+                        <p className="text-xs text-muted-foreground">Available: {inventory?.bun ?? 0}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("bun", -1)}
+                          disabled={addUserQuantities.bun === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-lg font-semibold">
+                          {addUserQuantities.bun}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("bun", 1)}
+                          disabled={addUserQuantities.bun >= (inventory?.bun ?? 0)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3">
+                      <div>
+                        <p className="font-medium">Tiramisu</p>
+                        <p className="text-xs text-muted-foreground">Available: {inventory?.tiramisu ?? 0}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("tiramisu", -1)}
+                          disabled={addUserQuantities.tiramisu === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-lg font-semibold">
+                          {addUserQuantities.tiramisu}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => updateAddUserQuantity("tiramisu", 1)}
+                          disabled={addUserQuantities.tiramisu >= (inventory?.tiramisu ?? 0)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {addUserError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{addUserError}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAddUserDialogOpen(false);
+                      setAddUserName("");
+                      setAddUserQuantities({ chai: 0, bun: 0, tiramisu: 0 });
+                      setAddUserError("");
+                    }}
+                    disabled={addUserSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={saveAddUser} disabled={addUserSaving}>
+                    {addUserSaving ? "Adding..." : "Add to Queue"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Delete Order Confirmation Dialog */}
             <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
               if (!open) {
@@ -1184,6 +1430,15 @@ function AdminDashboard() {
                         </p>
                       </div>
                     </div>
+                    <div className="flex items-center justify-between border-t pt-4">
+                      <span className="text-sm font-medium text-muted-foreground">Payment Status:</span>
+                      <Badge 
+                        variant={selectedTicket.paid ? "default" : "outline"}
+                        className={selectedTicket.paid ? "bg-green-600 text-white" : undefined}
+                      >
+                        {selectedTicket.paid ? "Paid" : "Unpaid"}
+                      </Badge>
+                    </div>
                   </div>
                 )}
                 <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -1213,6 +1468,36 @@ function AdminDashboard() {
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
+                  </Button>
+                  <Button
+                    variant={selectedTicket?.paid ? "outline" : "default"}
+                    className={`w-full sm:w-auto ${
+                      selectedTicket?.paid
+                        ? ""
+                        : "bg-green-600 text-white hover:bg-green-600/90"
+                    }`}
+                    onClick={async () => {
+                      if (selectedTicket && !paidUpdating[selectedTicket.id]) {
+                        const newPaidStatus = !selectedTicket.paid;
+                        // Optimistically update the local state
+                        setSelectedTicket({ ...selectedTicket, paid: newPaidStatus });
+                        // Update in the queue tickets list
+                        setQueueTickets((prev) =>
+                          prev.map((t) =>
+                            t.id === selectedTicket.id ? { ...t, paid: newPaidStatus } : t
+                          )
+                        );
+                        // Call the API
+                        await updatePaid(selectedTicket.id, selectedTicket.dateKey, newPaidStatus);
+                      }
+                    }}
+                    disabled={Boolean(selectedTicket && paidUpdating[selectedTicket.id])}
+                  >
+                    {selectedTicket && paidUpdating[selectedTicket.id]
+                      ? "Saving..."
+                      : selectedTicket?.paid
+                      ? "Mark as Unpaid"
+                      : "Mark as Paid"}
                   </Button>
                   <Button
                     onClick={() => {
@@ -1250,6 +1535,15 @@ function AdminDashboard() {
                     onChange={(e) => setDashboardDate(e.target.value || todayKey)}
                     className="w-full sm:w-[220px]"
                   />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadDashboardTickets(dashboardDate)}
+                    disabled={dashboardLoading}
+                  >
+                    <RotateCw className="mr-2 h-4 w-4" />
+                    {dashboardLoading ? "Loading..." : "Refresh"}
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
