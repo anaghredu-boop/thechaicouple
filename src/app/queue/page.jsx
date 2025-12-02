@@ -439,7 +439,7 @@ export default function QueuePage() {
           rel="noopener noreferrer"
           className="font-medium text-foreground hover:underline"
         >
-          devou
+          Devou Solutions
         </a>
       </footer>
     </main>
