@@ -289,21 +289,21 @@ function AdminDashboard() {
     loadPricing();
   }, []);
 
-  const reloadInventory = useCallback(async () => {
-    try {
-      const res = await fetch("/api/settings");
-      const json = await res.json();
-      if (res.ok) {
-        setInventory({
-          chai: json.inventory?.chai ?? 0,
-          bun: json.inventory?.bun ?? 0,
-          tiramisu: json.inventory?.tiramisu ?? 0,
-        });
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+  // const reloadInventory = useCallback(async () => {
+  //   try {
+  //     const res = await fetch("/api/settings");
+  //     const json = await res.json();
+  //     if (res.ok) {
+  //       setInventory({
+  //         chai: json.inventory?.chai ?? 0,
+  //         bun: json.inventory?.bun ?? 0,
+  //         tiramisu: json.inventory?.tiramisu ?? 0,
+  //       });
+  //     }
+  //   } catch {
+  //     // ignore
+  //   }
+  // }, []);
 
   useEffect(() => {
     if (tab !== "settings") return; // Only load when on Settings tab
