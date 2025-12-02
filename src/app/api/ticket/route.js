@@ -35,8 +35,8 @@ export async function DELETE(request) {
         const ticketData = ticketSnap.data();
         const items = Array.isArray(ticketData.items) ? ticketData.items : [];
         
-        // Only restore inventory if ticket status is "waiting"
-        const shouldRestoreInventory = ticketData.status === "waiting";
+        // Restore inventory for both "waiting" and "ready" status tickets
+        const shouldRestoreInventory = ticketData.status === "waiting" || ticketData.status === "ready";
 
         // ALL READS MUST BE DONE FIRST
         // Read settings BEFORE any writes (Firestore requirement)

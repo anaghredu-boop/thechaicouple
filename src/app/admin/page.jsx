@@ -453,6 +453,20 @@ function AdminDashboard() {
     });
   }
 
+  function handleEditQuantityChange(key, value) {
+    const numValue = value === "" ? 0 : Math.max(0, parseInt(value, 10) || 0);
+    const maxValue = key === "chai" ? editAvailability.chai : key === "bun" ? editAvailability.bun : editAvailability.tiramisu;
+    const clampedValue = Math.min(numValue, maxValue);
+    setEditQuantities((prev) => ({ ...prev, [key]: clampedValue }));
+  }
+
+  function handleAddUserQuantityChange(key, value) {
+    const numValue = value === "" ? 0 : Math.max(0, parseInt(value, 10) || 0);
+    const maxValue = key === "chai" ? (inventory?.chai ?? 0) : key === "bun" ? (inventory?.bun ?? 0) : (inventory?.tiramisu ?? 0);
+    const clampedValue = Math.min(numValue, maxValue);
+    setAddUserQuantities((prev) => ({ ...prev, [key]: clampedValue }));
+  }
+
   async function saveEdit() {
     if (!editingTicket) return;
     
@@ -533,6 +547,10 @@ function AdminDashboard() {
       
       // Success - close dialog
       // The stream will automatically update the queue and inventory
+      // Also refresh dashboard if needed (it doesn't have a stream)
+      if (dateKey === dashboardDate) {
+        await loadDashboardTickets(dashboardDate, { silent: true });
+      }
       setDeleteDialogOpen(false);
       setTicketToDelete(null);
       setDeletingTicket(null);
@@ -778,7 +796,14 @@ function AdminDashboard() {
     () =>
       dashboardTickets
         .filter((ticket) => ticket.status === "ready")
-        .sort((a, b) => (a.updatedAt?.seconds || 0) - (b.updatedAt?.seconds || 0)),
+        .sort((a, b) => {
+          // Sort unpaid tickets to the top
+          if (a.paid !== b.paid) {
+            return a.paid ? 1 : -1; // unpaid (false) comes before paid (true)
+          }
+          // If both have same paid status, sort by updatedAt
+          return (a.updatedAt?.seconds || 0) - (b.updatedAt?.seconds || 0);
+        }),
     [dashboardTickets]
   );
 
@@ -1091,9 +1116,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {editQuantities.chai}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={editAvailability.chai}
+                          value={editQuantities.chai}
+                          onChange={(e) => handleEditQuantityChange("chai", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1119,9 +1149,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {editQuantities.bun}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={editAvailability.bun}
+                          value={editQuantities.bun}
+                          onChange={(e) => handleEditQuantityChange("bun", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1147,9 +1182,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {editQuantities.tiramisu}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={editAvailability.tiramisu}
+                          value={editQuantities.tiramisu}
+                          onChange={(e) => handleEditQuantityChange("tiramisu", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1220,9 +1260,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {addUserQuantities.chai}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={inventory?.chai ?? 0}
+                          value={addUserQuantities.chai}
+                          onChange={(e) => handleAddUserQuantityChange("chai", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1248,9 +1293,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {addUserQuantities.bun}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={inventory?.bun ?? 0}
+                          value={addUserQuantities.bun}
+                          onChange={(e) => handleAddUserQuantityChange("bun", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1276,9 +1326,14 @@ function AdminDashboard() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-semibold">
-                          {addUserQuantities.tiramisu}
-                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={inventory?.tiramisu ?? 0}
+                          value={addUserQuantities.tiramisu}
+                          onChange={(e) => handleAddUserQuantityChange("tiramisu", e.target.value)}
+                          className="w-16 text-center text-lg font-semibold"
+                        />
                         <Button
                           type="button"
                           size="icon"
@@ -1311,64 +1366,6 @@ function AdminDashboard() {
                   </Button>
                   <Button onClick={saveAddUser} disabled={addUserSaving}>
                     {addUserSaving ? "Adding..." : "Add to Queue"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Delete Order Confirmation Dialog */}
-            <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
-              if (!open) {
-                setDeleteDialogOpen(false);
-                setTicketToDelete(null);
-                setDeleteError("");
-              }
-            }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Delete Order</DialogTitle>
-                  <DialogDescription>
-                    Are you sure you want to delete this order? This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                {ticketToDelete && (
-                  <div className="mt-2 rounded-md bg-muted p-3">
-                    <p className="font-medium">{ticketToDelete.name}</p>
-                    <div className="text-sm text-muted-foreground">
-                      {formatOrder(ticketToDelete.items)}
-                    </div>
-                  </div>
-                )}
-                {deleteError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{deleteError}</AlertDescription>
-                  </Alert>
-                )}
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setDeleteDialogOpen(false);
-                      setTicketToDelete(null);
-                      setDeleteError("");
-                    }}
-                    disabled={deletingTicket === ticketToDelete?.id}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={confirmDelete}
-                    disabled={deletingTicket === ticketToDelete?.id}
-                  >
-                    {deletingTicket === ticketToDelete?.id ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      "Delete Order"
-                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1577,6 +1574,7 @@ function AdminDashboard() {
                         <TableHead>Order</TableHead>
                         <TableHead>Payment</TableHead>
                         <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1617,6 +1615,19 @@ function AdminDashboard() {
                           </TableCell>
                           <TableCell className="text-right font-semibold">
                             {currency.format(ticketTotal(ticket, Number(chaiPrice) || 0, Number(bunPrice) || 0, Number(tiramisuPrice) || 0))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteDialog(ticket);
+                              }}
+                              disabled={deletingTicket === ticket.id}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1922,6 +1933,64 @@ function AdminDashboard() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Delete Order Confirmation Dialog - Shared across all tabs */}
+        <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setDeleteDialogOpen(false);
+            setTicketToDelete(null);
+            setDeleteError("");
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Order</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this order? Inventory will be restored. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            {ticketToDelete && (
+              <div className="mt-2 rounded-md bg-muted p-3">
+                <p className="font-medium">{ticketToDelete.name}</p>
+                <div className="text-sm text-muted-foreground">
+                  {formatOrder(ticketToDelete.items)}
+                </div>
+              </div>
+            )}
+            {deleteError && (
+              <Alert variant="destructive">
+                <AlertDescription>{deleteError}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setTicketToDelete(null);
+                  setDeleteError("");
+                }}
+                disabled={deletingTicket === ticketToDelete?.id}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDelete}
+                disabled={deletingTicket === ticketToDelete?.id}
+              >
+                {deletingTicket === ticketToDelete?.id ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete Order"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );

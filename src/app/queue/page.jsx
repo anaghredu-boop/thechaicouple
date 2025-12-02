@@ -431,6 +431,17 @@ export default function QueuePage() {
           </Alert>
         )}
       </div>
+      <footer className="w-full py-4 text-center text-sm text-muted-foreground">
+        Developed by{" "}
+        <a
+          href="https://devou.in"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-foreground hover:underline"
+        >
+          devou
+        </a>
+      </footer>
     </main>
   );
 }
