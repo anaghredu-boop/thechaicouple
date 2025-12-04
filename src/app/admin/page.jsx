@@ -135,6 +135,7 @@ function AdminDashboard() {
   const [connectionStatus, setConnectionStatus] = useState("connecting"); // "connected", "disconnected", "error", "connecting"
 
   const [dashboardDate, setDashboardDate] = useState(todayKey);
+  const [dashboardSearch, setDashboardSearch] = useState("");
   const [dashboardTickets, setDashboardTickets] = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState("");
@@ -806,6 +807,31 @@ function AdminDashboard() {
         }),
     [dashboardTickets]
   );
+
+  const filteredReadyTickets = useMemo(() => {
+    const query = dashboardSearch.trim().toLowerCase();
+    if (!query) {
+      return readyTickets;
+    }
+    return readyTickets.filter((ticket) => {
+      const nameMatch =
+        typeof ticket.name === "string" &&
+        ticket.name.toLowerCase().includes(query);
+      const tokenMatch = String(ticket.basePosition ?? "")
+        .toLowerCase()
+        .includes(query);
+      const itemsMatch = Array.isArray(ticket.items)
+        ? ticket.items.some((item) =>
+            typeof item.name === "string"
+              ? item.name.toLowerCase().includes(query)
+              : false
+          )
+        : false;
+      return nameMatch || tokenMatch || itemsMatch;
+    });
+  }, [dashboardSearch, readyTickets]);
+
+  const hasDashboardSearch = dashboardSearch.trim().length > 0;
 
   const readySummary = useMemo(() => {
     let chaiCount = 0;
@@ -1525,20 +1551,34 @@ function AdminDashboard() {
                     Pick a date to inspect ready orders and revenue.
                   </CardDescription>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Label className="text-xs uppercase text-muted-foreground">
-                    Date
-                  </Label>
-                  <Input
-                    type="date"
-                    max={todayKey}
-                    value={dashboardDate}
-                    onChange={(e) => setDashboardDate(e.target.value || todayKey)}
-                    className="w-full sm:w-[220px]"
-                  />
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end sm:gap-3">
+                  <div className="flex w-full flex-col gap-1 sm:w-auto">
+                    <Label className="text-xs uppercase text-muted-foreground">
+                      Date
+                    </Label>
+                    <Input
+                      type="date"
+                      max={todayKey}
+                      value={dashboardDate}
+                      onChange={(e) => setDashboardDate(e.target.value || todayKey)}
+                      className="w-full sm:w-[220px]"
+                    />
+                  </div>
+                  <div className="flex w-full flex-col gap-1 sm:flex-1">
+                    <Label className="text-xs uppercase text-muted-foreground">
+                      Search served orders
+                    </Label>
+                    <Input
+                      type="search"
+                      placeholder="Search name, token, or item"
+                      value={dashboardSearch}
+                      onChange={(e) => setDashboardSearch(e.target.value)}
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => loadDashboardTickets(dashboardDate)}
                     disabled={dashboardLoading}
                   >
@@ -1560,9 +1600,11 @@ function AdminDashboard() {
 
                 {dashboardLoading ? (
                   <LoaderCard />
-                ) : readyTickets.length === 0 ? (
+                ) : filteredReadyTickets.length === 0 ? (
                   <p className="py-12 text-center text-muted-foreground">
-                    No ready tickets for {dashboardDate}.
+                    {hasDashboardSearch
+                      ? `No matches for "${dashboardSearch.trim()}" on ${dashboardDate}.`
+                      : `No ready tickets for ${dashboardDate}.`}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1578,7 +1620,7 @@ function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {readyTickets.map((ticket) => (
+                      {filteredReadyTickets.map((ticket) => (
                         <TableRow 
                           key={ticket.id}
                           className="cursor-pointer hover:bg-muted/50"
