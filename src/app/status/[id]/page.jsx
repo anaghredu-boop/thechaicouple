@@ -319,11 +319,11 @@ export default function StatusPage() {
         <Card className="border-none shadow-lg">
           <CardHeader className="space-y-4">
             <div className="flex items-center justify-between">
-              {/* {tokenNumber && (
+              {tokenNumber && (
                 <Badge className="bg-amber-100 text-amber-900 text-base px-4 py-1">
                   Token #{tokenNumber}
                 </Badge>
-              )} */}
+              )}
             </div>
             <div className="text-center space-y-4">
             <div className="mx-auto h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow">
@@ -376,7 +376,7 @@ export default function StatusPage() {
                     <p className="text-sm text-muted-foreground">Name</p>
                     <p className="text-2xl font-semibold">{data.name}</p>
                   </div>
-                  {tokenNumber && (
+                  {/* {tokenNumber && (
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">
                         Token number
@@ -385,7 +385,7 @@ export default function StatusPage() {
                         #{tokenNumber}
                       </div>
                     </div>
-                  )}
+                  )} */}
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Current Queue Position
