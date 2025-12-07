@@ -376,7 +376,7 @@ export default function StatusPage() {
                     <p className="text-sm text-muted-foreground">Name</p>
                     <p className="text-2xl font-semibold">{data.name}</p>
                   </div>
-                  {/* {tokenNumber && (
+                  {tokenNumber && (
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">
                         Token number
@@ -385,7 +385,7 @@ export default function StatusPage() {
                         #{tokenNumber}
                       </div>
                     </div>
-                  )} */}
+                  )}
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Current Queue Position
