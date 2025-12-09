@@ -22,10 +22,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 
 const MENU = [
-  { key: "chai", label: "Special Chai" },
-  { key: "bun", label: "Bun" },
-  { key: "tiramisu", label: "Tiramisu" },
-  { key: "milkBun", label: "Milk Bun" },
+  { key: "chai", label: "Special Chai", displayLabel: "Special Chai" },
+  { key: "bun", label: "Bun Maska", displayLabel: "Maska" },
+  { key: "tiramisu", label: "Tiramisu", displayLabel: "Tiramisu" },
+  { key: "milkBun", label: "Milk Bun", displayLabel: "Milk Bun" },
 ];
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -328,7 +328,7 @@ export default function QueuePage() {
                     >
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium">{item.label}</p>
+                          <p className="font-medium">{item.displayLabel || item.label}</p>
                           {(!settingsLoaded || settingsLoading) && (
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                           )}
